@@ -1,0 +1,34 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>OptiTime</title>
+  <link rel="stylesheet" href="ui.css">
+</head>
+<body class="popup">
+  <header class="head">
+    <h1>OptiTime</h1>
+    <label class="switch" title="Turn blocking on or off">
+      <input type="checkbox" id="enabled" aria-label="Blocking enabled">
+      <span class="slider"></span>
+    </label>
+  </header>
+
+  <p id="status" class="muted"></p>
+  <ul id="sites" class="sites"></ul>
+  <p id="empty" class="muted" hidden>No sites yet. Add a distracting site below.</p>
+
+  <form id="add-form" class="add-form">
+    <input id="domain" placeholder="youtube.com" autocomplete="off" required aria-label="Website">
+    <input id="limit" type="number" min="0" max="1440" value="30" required aria-label="Daily limit in minutes">
+    <span class="unit">min/day</span>
+    <button class="primary" type="submit">Add</button>
+  </form>
+  <button id="add-current" class="link-btn" type="button"></button>
+  <p id="error" class="error" role="alert"></p>
+
+  <script src="lib/core.js"></script>
+  <script src="popup.js"></script>
+</body>
+</html>

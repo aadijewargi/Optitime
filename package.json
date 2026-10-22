@@ -1,0 +1,19 @@
+{
+  "name": "optitime",
+  "version": "1.0.0",
+  "description": "A web app that helps teenagers beat procrastination with structured daily schedules, task management, and focus timers.",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node --watch server.js",
+    "test": "node --test"
+  },
+  "keywords": ["productivity", "procrastination", "time-management", "express", "nodejs"],
+  "license": "MIT",
+  "engines": {
+    "node": ">=18"
+  },
+  "dependencies": {
+    "express": "^4.19.2"
+  }
+}

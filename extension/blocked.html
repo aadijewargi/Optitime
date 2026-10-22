@@ -1,0 +1,23 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Time's up | OptiTime</title>
+  <link rel="stylesheet" href="ui.css">
+</head>
+<body class="blocked-page">
+  <main class="block-card">
+    <div class="lock" aria-hidden="true">&#9201;</div>
+    <h1>Time's up for <span id="site">this site</span></h1>
+    <p id="usage" class="muted"></p>
+    <p>You set this limit to protect your time. Go finish what matters, and this site will be back tomorrow.</p>
+    <div class="actions">
+      <button id="newtab" class="primary">Open a new tab</button>
+      <button id="close">Close this tab</button>
+    </div>
+  </main>
+  <script src="lib/core.js"></script>
+  <script src="blocked.js"></script>
+</body>
+</html>

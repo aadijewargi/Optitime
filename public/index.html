@@ -1,0 +1,76 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>OptiTime</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header class="topbar">
+    <h1>OptiTime</h1>
+    <div class="stats" aria-live="polite">
+      <span><strong id="stat-focus">0</strong> min focused today</span>
+      <span><strong id="stat-done">0</strong> tasks done</span>
+      <span><strong id="stat-streak">0</strong>-day streak</span>
+    </div>
+  </header>
+
+  <main class="layout">
+    <section class="card timer-card" aria-labelledby="timer-heading">
+      <h2 id="timer-heading">Focus timer</h2>
+      <p id="timer-task" class="muted">Pick a task below, then press start.</p>
+      <div id="timer-display" class="timer-display" role="timer" aria-live="off">25:00</div>
+      <div id="timer-mode" class="timer-mode">Focus</div>
+      <div class="timer-controls">
+        <button id="timer-start" class="primary">Start</button>
+        <button id="timer-pause" disabled>Pause</button>
+        <button id="timer-reset" disabled>Reset</button>
+      </div>
+      <div class="progress" aria-hidden="true"><div id="timer-progress" class="progress-bar"></div></div>
+    </section>
+
+    <section class="card" aria-labelledby="tasks-heading">
+      <h2 id="tasks-heading">Tasks</h2>
+      <form id="task-form" class="task-form">
+        <input id="task-title" placeholder="What do you need to do?" maxlength="120" required>
+        <input id="task-estimate" type="number" min="5" max="480" step="5" value="30" required aria-label="Estimated minutes">
+        <input id="task-due" type="date" aria-label="Due date">
+        <select id="task-priority" aria-label="Priority">
+          <option value="low">Low</option>
+          <option value="medium" selected>Medium</option>
+          <option value="high">High</option>
+        </select>
+        <button class="primary" type="submit">Add</button>
+      </form>
+      <p id="form-error" class="error" role="alert"></p>
+      <ul id="task-list" class="task-list"></ul>
+      <p id="task-empty" class="muted" hidden>No tasks yet. Add your first one above.</p>
+    </section>
+
+    <section class="card" aria-labelledby="schedule-heading">
+      <div class="card-head">
+        <h2 id="schedule-heading">Today's plan</h2>
+        <button id="schedule-refresh">Regenerate</button>
+      </div>
+      <ol id="schedule-list" class="schedule-list"></ol>
+      <p id="schedule-empty" class="muted" hidden>Add tasks to generate a plan.</p>
+      <div id="unscheduled" class="unscheduled" hidden></div>
+    </section>
+
+    <section class="card" aria-labelledby="settings-heading">
+      <h2 id="settings-heading">Settings</h2>
+      <form id="settings-form" class="settings-form">
+        <label>Day starts <input id="set-start" type="time" required></label>
+        <label>Day ends <input id="set-end" type="time" required></label>
+        <label>Focus (min) <input id="set-focus" type="number" min="5" max="90" required></label>
+        <label>Break (min) <input id="set-break" type="number" min="1" max="30" required></label>
+        <button type="submit">Save</button>
+      </form>
+      <p id="settings-msg" class="muted" role="status"></p>
+    </section>
+  </main>
+
+  <script src="app.js"></script>
+</body>
+</html>
