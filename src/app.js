@@ -23,6 +23,7 @@ function createApp(store) {
       return res.status(400).json({ error: 'Missing or invalid x-user-id header' });
     }
     req.userId = id;
+    res.set('Cache-Control', 'no-store'); // live data: never serve a stale copy
     next();
   });
 
@@ -53,13 +54,14 @@ function createApp(store) {
   });
 
   // ---- Schedule ----
+  // The browser sends its own local clock (?now=2026-10-23T15:32:00) so the plan
+  // starts at the user's current time even if the server runs in another timezone.
   app.get('/api/schedule', (req, res) => {
-    const schedule = generateSchedule(
-      store.listTasks(req.userId),
-      store.getSettings(req.userId),
-      new Date()
-    );
-    res.json(schedule);
+    const clientNow = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(:\d{2})?$/.test(req.query.now || '')
+      ? new Date(req.query.now)
+      : null;
+    const now = clientNow && !Number.isNaN(clientNow.getTime()) ? clientNow : new Date();
+    res.json(generateSchedule(store.listTasks(req.userId), store.getSettings(req.userId), now));
   });
 
   // ---- Settings ----
@@ -80,8 +82,12 @@ function createApp(store) {
     res.status(201).json(store.logSession(req.userId, value));
   });
 
+  // ?tzOffset is the browser's Date#getTimezoneOffset() so "today" means the
+  // user's local day, not the UTC day.
   app.get('/api/stats', (req, res) => {
-    res.json(store.getStats(req.userId));
+    const offset = Number(req.query.tzOffset);
+    const tzOffset = Number.isInteger(offset) && Math.abs(offset) <= 840 ? offset : 0;
+    res.json(store.getStats(req.userId, new Date(), tzOffset));
   });
 
   // ---- Fallbacks ----

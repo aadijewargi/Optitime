@@ -136,26 +136,31 @@ class Store {
   }
 
   // ---- Stats ----
-  getStats(userId, today = new Date()) {
+  /**
+   * @param {number} tzOffset minutes behind UTC, as Date#getTimezoneOffset()
+   *   reports it (Los Angeles in summer = 420). Day boundaries use this so
+   *   "today" is the user's local day.
+   */
+  getStats(userId, today = new Date(), tzOffset = 0) {
     const user = this._user(userId);
-    const dayKey = today.toISOString().slice(0, 10);
+    const localDay = (when) => new Date(new Date(when).getTime() - tzOffset * 60000).toISOString().slice(0, 10);
+    const dayKey = localDay(today);
+
     const focusToday = user.sessions
-      .filter((s) => s.type === 'focus' && s.endedAt.slice(0, 10) === dayKey)
+      .filter((s) => s.type === 'focus' && localDay(s.endedAt) === dayKey)
       .reduce((sum, s) => sum + s.minutes, 0);
     const completedToday = user.tasks.filter(
-      (t) => t.done && t.completedAt && t.completedAt.slice(0, 10) === dayKey
+      (t) => t.done && t.completedAt && localDay(t.completedAt) === dayKey
     ).length;
 
     // Streak: consecutive days (ending today or yesterday) with >= 1 focus session
-    const days = new Set(
-      user.sessions.filter((s) => s.type === 'focus').map((s) => s.endedAt.slice(0, 10))
-    );
+    const days = new Set(user.sessions.filter((s) => s.type === 'focus').map((s) => localDay(s.endedAt)));
     let streak = 0;
-    const cursor = new Date(today);
-    if (!days.has(cursor.toISOString().slice(0, 10))) cursor.setDate(cursor.getDate() - 1);
+    const cursor = new Date(`${dayKey}T00:00:00Z`);
+    if (!days.has(dayKey)) cursor.setUTCDate(cursor.getUTCDate() - 1);
     while (days.has(cursor.toISOString().slice(0, 10))) {
       streak += 1;
-      cursor.setDate(cursor.getDate() - 1);
+      cursor.setUTCDate(cursor.getUTCDate() - 1);
     }
 
     return { focusToday, completedToday, streak };

@@ -15,6 +15,7 @@ importScripts('lib/core.js');
 const { findSite, dayKey, computeBlocked } = OptiCore;
 
 const ALARM = 'optitime-tick';
+const EXPIRE_ALARM = 'optitime-expire';
 const MAX_CREDIT_SECONDS = 90; // never credit more than this per tick (sleep, crashes)
 const IDLE_SECONDS = 60;
 const BLOCK_PAGE = 'blocked.html';
@@ -60,8 +61,16 @@ function blockUrl(domain) {
   return chrome.runtime.getURL(`${BLOCK_PAGE}?site=${encodeURIComponent(domain)}`);
 }
 
+// The blocked set we last pushed to Chrome. Rebuilding rules and sweeping tabs
+// is only needed when this changes (it resets if the worker restarts, which
+// simply causes one harmless re-apply).
+let lastBlockedKey = null;
+
 async function applyBlocking(state) {
   const blocked = state.enabled ? computeBlocked(state.sites, state.usage.seconds) : [];
+  const key = [...blocked].sort().join('|');
+  if (key === lastBlockedKey) return;
+  lastBlockedKey = key;
 
   const existing = await chrome.declarativeNetRequest.getDynamicRules();
   await chrome.declarativeNetRequest.updateDynamicRules({
@@ -113,6 +122,24 @@ async function tick() {
     tracking: { domain, at: now },
   });
   await applyBlocking(state);
+  await scheduleExpiry(state, domain);
+}
+
+// Wake up right when the limit for the current site runs out, instead of
+// waiting for the next 30s tick. (Chrome may round alarms up to 30s in
+// published extensions, so short waits also use a timer while the worker is
+// still awake.)
+let expiryTimer = null;
+async function scheduleExpiry(state, domain) {
+  clearTimeout(expiryTimer);
+  await chrome.alarms.clear(EXPIRE_ALARM);
+  if (!domain || !state.enabled) return;
+  const site = state.sites.find((s) => s.domain === domain);
+  if (!site) return;
+  const remaining = site.limitMinutes * 60 - (state.usage.seconds[domain] || 0);
+  if (remaining <= 0) return;
+  chrome.alarms.create(EXPIRE_ALARM, { when: Date.now() + remaining * 1000 + 500 });
+  if (remaining <= 25) expiryTimer = setTimeout(scheduleTick, remaining * 1000 + 300);
 }
 
 function scheduleTick() {
@@ -138,7 +165,7 @@ chrome.runtime.onStartup.addListener(async () => {
 });
 
 chrome.alarms.onAlarm.addListener((a) => {
-  if (a.name === ALARM) scheduleTick();
+  if (a.name === ALARM || a.name === EXPIRE_ALARM) scheduleTick();
 });
 
 chrome.tabs.onActivated.addListener(scheduleTick);

@@ -35,6 +35,7 @@ const state = {
   tasks: [],
   settings: { dayStart: '15:30', dayEnd: '21:00', focusMinutes: 25, breakMinutes: 5 },
   selectedTaskId: null,
+  stats: { focusToday: 0, completedToday: 0, streak: 0 },
 };
 
 const $ = (id) => document.getElementById(id);
@@ -96,8 +97,16 @@ function renderTasks() {
   }
 }
 
+// The browser's own clock, e.g. "2026-10-23T15:32:07", so the server plans in
+// the user's timezone rather than its own.
+function localNowISO() {
+  const d = new Date();
+  const p = (n) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`;
+}
+
 async function renderSchedule() {
-  const { blocks, unscheduled } = await api('/schedule');
+  const { blocks, unscheduled } = await api(`/schedule?now=${encodeURIComponent(localNowISO())}`);
   const list = $('schedule-list');
   list.innerHTML = '';
   $('schedule-empty').hidden = blocks.length > 0;
@@ -127,10 +136,21 @@ async function renderSchedule() {
 }
 
 async function renderStats() {
-  const stats = await api('/stats');
-  $('stat-focus').textContent = stats.focusToday;
+  const stats = await api(`/stats?tzOffset=${new Date().getTimezoneOffset()}`);
+  state.stats = stats;
   $('stat-done').textContent = stats.completedToday;
   $('stat-streak').textContent = stats.streak;
+  renderFocusStat();
+}
+
+// Saved focus minutes plus the part of the running focus interval already
+// elapsed, so the number moves while the timer runs instead of jumping at the end.
+function renderFocusStat() {
+  let minutes = state.stats.focusToday;
+  if (timer.interval && timer.mode === 'focus') {
+    minutes += (timer.totalSeconds - timer.remaining) / 60;
+  }
+  $('stat-focus').textContent = Math.floor(minutes);
 }
 
 function renderSettings() {
@@ -180,6 +200,7 @@ function renderTimer() {
   document.title = timer.interval
     ? `${formatTime(timer.remaining)} · OptiTime`
     : 'OptiTime';
+  renderFocusStat();
 }
 
 function selectTask(id) {
@@ -304,6 +325,21 @@ $('settings-form').addEventListener('submit', async (e) => {
   } catch (err) {
     $('settings-msg').textContent = err.message;
   }
+});
+
+// ---------- Keep everything fresh ----------
+// The plan starts at "now", so regenerate it every minute while the tab is visible.
+setInterval(() => {
+  if (!document.hidden) renderSchedule().catch(() => {});
+}, 60000);
+
+// Background tabs throttle timers. When the tab comes back, catch the timer up
+// immediately and reload the plan and stats.
+document.addEventListener('visibilitychange', () => {
+  if (document.hidden) return;
+  if (timer.interval) tick();
+  renderSchedule().catch(() => {});
+  renderStats().catch(() => {});
 });
 
 // ---------- Boot ----------
