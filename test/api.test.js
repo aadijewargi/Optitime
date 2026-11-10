@@ -67,6 +67,19 @@ test('schedule endpoint returns blocks for open tasks', async () => {
     await call('/tasks', 'POST', { title: 'Read chapter', estimateMinutes: 30 });
     const schedule = await (await call('/schedule')).json();
     assert.ok(schedule.blocks.some((b) => b.type === 'focus'));
+    assert.strictEqual(schedule.plan[0].title, 'Read chapter');
+    assert.strictEqual(schedule.summary.method, 'exact');
+    assert.strictEqual(schedule.summary.lateTasks, 0);
+  });
+});
+
+test('schedule endpoint plans from the client clock', async () => {
+  await withServer(async (call) => {
+    await call('/settings', 'PUT', { dayStart: '15:00', dayEnd: '18:00' });
+    await call('/tasks', 'POST', { title: 'Overdue essay', estimateMinutes: 25, dueDate: '2026-10-14' });
+    const schedule = await (await call('/schedule?now=2026-10-15T16:02:00')).json();
+    assert.strictEqual(schedule.blocks[0].start, '16:05');
+    assert.match(schedule.plan[0].reason, /^Overdue since/);
   });
 });
 

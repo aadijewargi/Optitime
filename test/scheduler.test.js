@@ -73,3 +73,154 @@ test('never schedules in the past', () => {
   const { blocks } = generateSchedule([mk()], settings, late);
   assert.strictEqual(blocks[0].start, '16:15');
 });
+
+// ---------------------------------------------------------------------------
+// Optimizer-backed planning
+// ---------------------------------------------------------------------------
+const { daySlots, toMinutes } = require('../src/scheduler');
+
+const focusMinutes = (blocks) =>
+  blocks.filter((b) => b.type === 'focus').reduce((s, b) => s + b.minutes, 0);
+
+test('day slots: inside the window, no overlaps, long break after every 4th block', () => {
+  const slots = daySlots(toMinutes('15:00'), toMinutes('21:00'), 25, 5, 15);
+  let prevEnd = toMinutes('15:00');
+  let focusCount = 0;
+  for (const s of slots) {
+    assert.ok(s.start >= prevEnd && s.end <= toMinutes('21:00') && s.end > s.start);
+    prevEnd = s.end;
+    if (s.type === 'focus') focusCount += 1;
+    else assert.strictEqual(s.end - s.start, focusCount % 4 === 0 ? 15 : 5);
+  }
+  assert.strictEqual(slots[0].type, 'focus');
+});
+
+test('when the day is overloaded it sacrifices low priority work, not high', () => {
+  // 15:00-16:00 with 25/5 -> 50 focus minutes today, 80 minutes of work.
+  const s = { dayStart: '15:00', dayEnd: '16:00', focusMinutes: 25, breakMinutes: 5 };
+  const tasks = [
+    mk({ id: 'essay', title: 'Essay', estimateMinutes: 30, priority: 'low', dueDate: '2026-10-15' }),
+    mk({ id: 'quiz', title: 'Quiz prep', estimateMinutes: 25, priority: 'high', dueDate: '2026-10-15' }),
+    mk({ id: 'lab', title: 'Lab report', estimateMinutes: 25, priority: 'high', dueDate: '2026-10-15' }),
+  ];
+  const { plan, summary, unscheduled } = generateSchedule(tasks, s, now);
+  const late = plan.filter((p) => p.late).map((p) => p.taskId);
+  assert.deepStrictEqual(late, ['essay']);
+  assert.strictEqual(unscheduled[0].taskId, 'essay');
+  // The old rule order (due date, priority, size) is no better.
+  assert.ok(summary.weightedLateMinutes <= summary.baseline.weightedLateMinutes);
+  assert.strictEqual(summary.method, 'exact');
+});
+
+test('beats the old rule order when a big due-today task blocks important work', () => {
+  // Today: 50 focus minutes. Tomorrow: a full 15:00-18:00 window.
+  const s = { dayStart: '15:00', dayEnd: '16:00', focusMinutes: 25, breakMinutes: 5 };
+  const tasks = [
+    mk({ id: 'big', estimateMinutes: 120, priority: 'low', dueDate: '2026-10-15' }),
+    mk({ id: 'a', estimateMinutes: 25, priority: 'high', dueDate: '2026-10-16' }),
+    mk({ id: 'b', estimateMinutes: 25, priority: 'high', dueDate: '2026-10-16' }),
+  ];
+  const { summary, plan } = generateSchedule(tasks, s, now);
+  // Old order: big first (earliest due) -> both high-priority tasks late too.
+  assert.strictEqual(summary.baseline.lateTasks, 3);
+  assert.strictEqual(summary.lateTasks, 1);
+  assert.ok(summary.weightedLateMinutes < summary.baseline.weightedLateMinutes);
+  assert.strictEqual(plan[plan.length - 1].taskId, 'big');
+});
+
+test('a task due later is not late just because it does not fit today', () => {
+  // 145 focus minutes fit in 15:00-18:00, so 200 minutes finish tomorrow.
+  const tasks = [mk({ id: 'proj', estimateMinutes: 200, dueDate: '2026-10-17' })];
+  const { plan, unscheduled } = generateSchedule(tasks, settings, now);
+  assert.strictEqual(plan[0].late, false);
+  assert.strictEqual(plan[0].finishesOn, 'tomorrow');
+  assert.strictEqual(unscheduled[0].reason, 'Partly scheduled - day window is full');
+});
+
+test('overdue work goes first and says why', () => {
+  const tasks = [
+    mk({ id: 'new', estimateMinutes: 25, priority: 'high', dueDate: '2026-10-20' }),
+    mk({ id: 'old', estimateMinutes: 25, priority: 'low', dueDate: '2026-10-13' }),
+  ];
+  const { blocks, plan } = generateSchedule(tasks, settings, now, { quickWin: false });
+  assert.strictEqual(blocks[0].taskId, 'old');
+  assert.match(plan[0].reason, /^Overdue since/);
+});
+
+test('quick win leads only when it makes nothing late', () => {
+  const free = [mk({ id: 'big', estimateMinutes: 90 }), mk({ id: 'tiny', estimateMinutes: 10 })];
+  const r1 = generateSchedule(free, settings, now);
+  assert.strictEqual(r1.blocks[0].taskId, 'tiny');
+
+  // 15:00-15:30 window: only 25 minutes. The due-today task needs all of it.
+  const tight = { ...settings, dayEnd: '15:30' };
+  const busy = [
+    mk({ id: 'due', estimateMinutes: 25, priority: 'high', dueDate: '2026-10-15' }),
+    mk({ id: 'tiny', estimateMinutes: 10, priority: 'low' }),
+  ];
+  const r2 = generateSchedule(busy, tight, now);
+  assert.strictEqual(r2.blocks[0].taskId, 'due');
+  assert.strictEqual(r2.summary.lateTasks, 0);
+});
+
+test('fills a focus block with the next task instead of wasting it', () => {
+  const tasks = [
+    mk({ id: 'a', estimateMinutes: 15, dueDate: '2026-10-15' }),
+    mk({ id: 'b', estimateMinutes: 20, dueDate: '2026-10-16' }),
+  ];
+  const { blocks } = generateSchedule(tasks, settings, now, { quickWin: false });
+  assert.deepStrictEqual(
+    blocks.map((b) => [b.type, b.taskId, b.start, b.end]),
+    [
+      ['focus', 'a', '15:00', '15:15'],
+      ['focus', 'b', '15:15', '15:25'],
+      ['break', null, '15:25', '15:30'],
+      ['focus', 'b', '15:30', '15:40'],
+    ],
+  );
+  assert.strictEqual(blocks[1].part, '1/2');
+});
+
+test('many tasks switch to the heuristic and still produce a valid plan', () => {
+  const tasks = Array.from({ length: 25 }, (_, i) =>
+    mk({ id: `t${i}`, estimateMinutes: 5 + ((i * 17) % 60), dueDate: `2026-10-${15 + (i % 5)}`, priority: ['low', 'medium', 'high'][i % 3] }),
+  );
+  const { summary, plan } = generateSchedule(tasks, settings, now);
+  assert.strictEqual(summary.method, 'heuristic');
+  assert.strictEqual(new Set(plan.map((p) => p.taskId)).size, 25);
+});
+
+test('an empty or inverted day window plans nothing and does not crash', () => {
+  const inverted = { ...settings, dayStart: '18:00', dayEnd: '15:00' };
+  const tasks = [mk({ dueDate: '2026-10-16' }), mk()];
+  const { blocks, unscheduled, summary } = generateSchedule(tasks, inverted, now);
+  assert.strictEqual(blocks.length, 0);
+  assert.strictEqual(unscheduled.length, 2);
+  assert.strictEqual(summary.capacityPerDay, 0);
+  assert.deepStrictEqual(generateSchedule([], settings, now).blocks, []);
+});
+
+test('property: blocks never overlap, stay in the window and never exceed the work', () => {
+  for (let seed = 1; seed <= 50; seed++) {
+    const tasks = Array.from({ length: 1 + (seed % 9) }, (_, i) =>
+      mk({
+        id: `s${seed}-${i}`,
+        estimateMinutes: 5 + ((seed * 31 + i * 47) % 150),
+        minutesSpent: (seed + i) % 4 === 0 ? 10 : 0,
+        dueDate: (seed + i) % 3 ? `2026-10-${14 + ((seed + i) % 6)}` : null,
+        priority: ['low', 'medium', 'high'][(seed + i) % 3],
+      }),
+    );
+    const late = new Date(`2026-10-15T${String(14 + (seed % 4)).padStart(2, '0')}:${String((seed * 7) % 60).padStart(2, '0')}:00`);
+    const { blocks, unscheduled } = generateSchedule(tasks, settings, late);
+    let prev = Math.max(toMinutes('15:00'), late.getHours() * 60 + late.getMinutes());
+    for (const b of blocks) {
+      assert.ok(toMinutes(b.start) >= prev, `seed ${seed}: overlap or past`);
+      assert.ok(toMinutes(b.end) <= toMinutes('18:00'));
+      prev = toMinutes(b.end);
+    }
+    const work = tasks.reduce((s, t) => s + Math.max(0, t.estimateMinutes - t.minutesSpent), 0);
+    const leftover = unscheduled.reduce((s, u) => s + u.minutesLeft, 0);
+    assert.strictEqual(focusMinutes(blocks) + leftover, work, `seed ${seed}: minutes lost`);
+  }
+});
