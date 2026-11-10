@@ -3,6 +3,7 @@
 const test = require('node:test');
 const assert = require('node:assert');
 const {
+  better,
   evaluate,
   solveExact,
   solveHeuristic,
@@ -30,7 +31,10 @@ function randomJobs(n, rand) {
     const w = 1 + Math.floor(rand() * 3);
     // ~20% without deadline, otherwise a deadline anywhere in a tight horizon
     const d = rand() < 0.2 ? Infinity : Math.floor(rand() * n * 50);
-    jobs.push({ p, d, w });
+    const job = { p, d, w };
+    // Half the jobs get a softer, earlier target.
+    if (Number.isFinite(d) && rand() < 0.5) job.s = Math.max(0, d - Math.floor(rand() * 100));
+    jobs.push(job);
   }
   return jobs;
 }
@@ -50,13 +54,7 @@ function bruteForce(jobs) {
   let best = null;
   for (const order of permutations(jobs.map((_, i) => i))) {
     const c = evaluate(jobs, order);
-    if (
-      !best ||
-      c.tardiness < best.tardiness ||
-      (c.tardiness === best.tardiness && c.weightedCompletion < best.weightedCompletion)
-    ) {
-      best = { order, ...c };
-    }
+    if (!best || better(c, best)) best = { order, ...c };
   }
   return best;
 }
@@ -69,8 +67,12 @@ test('evaluate computes weighted tardiness and completion by hand', () => {
   ];
   assert.deepStrictEqual(evaluate(jobs, [0, 1, 2]), {
     tardiness: 50,
+    softTardiness: 50, // no soft targets: same as tardiness
     weightedCompletion: 2 * 30 + 1 * 40 + 3 * 60,
   });
+  // A soft target 15 minutes before the deadline adds the extra margin missed.
+  const soft = [{ p: 30, d: 40, s: 25, w: 2 }];
+  assert.deepStrictEqual(evaluate(soft, [0]), { tardiness: 0, softTardiness: 10, weightedCompletion: 60 });
 });
 
 test('exact DP matches brute force on 300 random instances (n = 1..7)', () => {
@@ -80,10 +82,12 @@ test('exact DP matches brute force on 300 random instances (n = 1..7)', () => {
     const dp = solveExact(jobs);
     const bf = bruteForce(jobs);
     assert.strictEqual(dp.tardiness, bf.tardiness, `trial ${trial}`);
+    assert.strictEqual(dp.softTardiness, bf.softTardiness, `trial ${trial}`);
     assert.strictEqual(dp.weightedCompletion, bf.weightedCompletion, `trial ${trial}`);
     // The returned order really achieves the reported cost and is a permutation.
     assert.deepStrictEqual(evaluate(jobs, dp.order), {
       tardiness: dp.tardiness,
+      softTardiness: dp.softTardiness,
       weightedCompletion: dp.weightedCompletion,
     });
     assert.deepStrictEqual([...dp.order].sort((a, b) => a - b), jobs.map((_, i) => i));
@@ -123,6 +127,19 @@ test('sacrifices one low-priority job instead of making two important ones late'
   assert.strictEqual(opt.tardiness, 40); // low job 40 late, weight 1
   assert.ok(opt.tardiness < edd.tardiness);
   assert.deepStrictEqual(opt.order.slice(-1), [0]);
+});
+
+test('soft targets break ties between deadline-safe orders', () => {
+  // Both orders meet both deadlines. Without soft targets WSPT puts the short
+  // no-deadline job first; a soft target pulls the due job ahead.
+  const jobs = [
+    { p: 60, d: 200, w: 1 },
+    { p: 10, d: Infinity, w: 1 },
+  ];
+  assert.deepStrictEqual(solveExact(jobs).order, [1, 0]);
+  jobs[0].s = 0;
+  assert.deepStrictEqual(solveExact(jobs).order, [0, 1]);
+  assert.strictEqual(solveExact(jobs).tardiness, 0);
 });
 
 test('edge cases: empty, single job, identical jobs, all overdue', () => {

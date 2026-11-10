@@ -10,7 +10,9 @@
  *    on day k must be finished by the end of day k's window on that clock;
  *    overdue tasks are due at 0.
  * 3. Ask the optimizer (src/optimizer.js) for the order that minimises
- *    priority-weighted lateness, then weighted completion time.
+ *    priority-weighted lateness; among equally good orders it prefers ones
+ *    that finish a day ahead of each deadline, then important/short work.
+ *    Overdue tasks are due at 0, so they are worked off first.
  * 4. Pour that order into today's focus blocks and explain each decision.
  *
  * Anti-procrastination ideas kept from the original planner: big tasks are
@@ -122,12 +124,13 @@ function capacityOf(slots) {
   return slots.reduce((s, x) => s + (x.type === 'focus' ? x.end - x.start : 0), 0);
 }
 
+/** Tasks that will miss a deadline they could still have met (not overdue). */
 function lateCount(jobs, order) {
   let t = 0;
   let n = 0;
   for (const j of order) {
     t += jobs[j].p;
-    if (t > jobs[j].d) n += 1;
+    if (t > jobs[j].d && !(jobs[j].dueIn < 0)) n += 1;
   }
   return n;
 }
@@ -166,7 +169,9 @@ function generateSchedule(tasks, settings, now = new Date(), options = {}) {
     const dueIn = task.dueDate ? daysUntil(task.dueDate, now) : null;
     let d = Infinity;
     if (dueIn !== null) d = dueIn < 0 ? 0 : capToday + dueIn * capFull;
-    return { p: remaining, d, w: PRIORITY_VALUE[task.priority] ?? 2, dueIn };
+    // Soft target: one full day of focus time before the deadline.
+    const s = Number.isFinite(d) ? Math.max(0, d - capFull) : Infinity;
+    return { p: remaining, d, s, w: PRIORITY_VALUE[task.priority] ?? 2, dueIn };
   });
 
   // ---- 2. Optimize ----
@@ -320,6 +325,7 @@ function generateSchedule(tasks, settings, now = new Date(), options = {}) {
     tasksConsidered: jobs.length,
     capacityToday: capToday,
     capacityPerDay: capFull,
+    overdueTasks: jobs.filter((j) => j.dueIn !== null && j.dueIn < 0).length,
     lateTasks: lateCount(jobs, order),
     weightedLateMinutes: cost.tardiness,
     baseline: {

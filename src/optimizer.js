@@ -5,13 +5,19 @@
  *
  * Problem: one person (a single "machine") has n jobs. Job j needs p_j minutes
  * of work, is due at work-time d_j (Infinity = no deadline) and has a weight
- * w_j (its priority). If a job finishes at C_j its tardiness is
- * T_j = max(0, C_j - d_j). We look for the order that minimises, in this order
- * of importance:
+ * w_j (its priority). It may also have a softer, earlier target s_j <= d_j
+ * (default s_j = d_j), e.g. "a day before it's due". If a job finishes at C_j
+ * its tardiness is T_j = max(0, C_j - d_j). We look for the order that
+ * minimises, in this order of importance:
  *
- *   1. total weighted tardiness   sum_j w_j * T_j
- *   2. total weighted completion  sum_j w_j * C_j   (tie-breaker: finish
- *      important and short work early when no deadline is at stake)
+ *   1. total weighted tardiness        sum_j w_j * max(0, C_j - d_j)
+ *   2. total weighted soft tardiness   sum_j w_j * max(0, C_j - s_j)
+ *      (keep a safety margin before deadlines when it is free)
+ *   3. total weighted completion       sum_j w_j * C_j
+ *      (then finish important and short work early)
+ *
+ * All three are sums of per-job costs that depend only on C_j, so the
+ * lexicographic objective can be optimised exactly by the same DP.
  *
  * In scheduling notation the primary objective is 1 || sum w_j T_j, which is
  * strongly NP-hard (Lenstra, Rinnooy Kan & Brucker, 1977). Two solvers:
@@ -30,9 +36,13 @@
 
 const DEFAULT_EXACT_LIMIT = 18;
 
-/** Lexicographic "a is better than b" for [tardiness, completion] pairs. */
-function better(t1, f1, t2, f2) {
-  return t1 < t2 || (t1 === t2 && f1 < f2);
+const softOf = (job) => (job.s === undefined ? job.d : Math.min(job.s, job.d));
+
+/** Lexicographic comparison of cost objects. */
+function better(a, b) {
+  if (a.tardiness !== b.tardiness) return a.tardiness < b.tardiness;
+  if (a.softTardiness !== b.softTardiness) return a.softTardiness < b.softTardiness;
+  return a.weightedCompletion < b.weightedCompletion;
 }
 
 /**
@@ -43,14 +53,17 @@ function better(t1, f1, t2, f2) {
 function evaluate(jobs, order) {
   let t = 0;
   let tardiness = 0;
+  let softTardiness = 0;
   let weightedCompletion = 0;
   for (const j of order) {
     const { p, d, w } = jobs[j];
+    const s = softOf(jobs[j]);
     t += p;
     if (t > d) tardiness += w * (t - d);
+    if (t > s) softTardiness += w * (t - s);
     weightedCompletion += w * t;
   }
-  return { tardiness, weightedCompletion };
+  return { tardiness, softTardiness, weightedCompletion };
 }
 
 /**
@@ -66,7 +79,9 @@ function solveExact(jobs) {
   const N = 1 << n;
   const psum = new Float64Array(N);
   const dpT = new Float64Array(N);
+  const dpS = new Float64Array(N);
   const dpF = new Float64Array(N);
+  const soft = jobs.map(softOf);
   const last = new Int8Array(N);
 
   for (let S = 1; S < N; S++) {
@@ -74,6 +89,7 @@ function solveExact(jobs) {
     psum[S] = psum[S ^ low] + jobs[31 - Math.clz32(low)].p;
     const C = psum[S];
     let bestT = Infinity;
+    let bestS = Infinity;
     let bestF = Infinity;
     let bestJ = -1;
     for (let j = 0, bit = 1; j < n; j++, bit <<= 1) {
@@ -81,14 +97,17 @@ function solveExact(jobs) {
       const { d, w } = jobs[j];
       const prev = S ^ bit;
       const t = dpT[prev] + (C > d ? w * (C - d) : 0);
+      const sv = dpS[prev] + (C > soft[j] ? w * (C - soft[j]) : 0);
       const f = dpF[prev] + w * C;
-      if (better(t, f, bestT, bestF)) {
+      if (t < bestT || (t === bestT && (sv < bestS || (sv === bestS && f < bestF)))) {
         bestT = t;
+        bestS = sv;
         bestF = f;
         bestJ = j;
       }
     }
     dpT[S] = bestT;
+    dpS[S] = bestS;
     dpF[S] = bestF;
     last[S] = bestJ;
   }
@@ -96,7 +115,7 @@ function solveExact(jobs) {
   const order = [];
   for (let S = N - 1; S; S ^= 1 << last[S]) order.push(last[S]);
   order.reverse();
-  return { order, tardiness: dpT[N - 1], weightedCompletion: dpF[N - 1] };
+  return { order, tardiness: dpT[N - 1], softTardiness: dpS[N - 1], weightedCompletion: dpF[N - 1] };
 }
 
 /** Earliest due date first; ties by weight (desc), then index. */
@@ -166,7 +185,7 @@ function localSearch(jobs, start, maxPasses = 50) {
         if (k === i) continue; // same as the current order
         const cand = rest.slice(0, k).concat([job], rest.slice(k));
         const c = evaluate(jobs, cand);
-        if (better(c.tardiness, c.weightedCompletion, bestCost.tardiness, bestCost.weightedCompletion)) {
+        if (better(c, bestCost)) {
           bestCost = c;
           bestPos = k;
         }
@@ -188,7 +207,7 @@ function solveHeuristic(jobs) {
   let best = null;
   for (const s of starts) {
     const r = localSearch(jobs, s);
-    if (!best || better(r.tardiness, r.weightedCompletion, best.tardiness, best.weightedCompletion)) {
+    if (!best || better(r, best)) {
       best = r;
     }
   }
@@ -202,8 +221,8 @@ function solveHeuristic(jobs) {
  */
 function sequence(jobs, { exactLimit = DEFAULT_EXACT_LIMIT } = {}) {
   for (const j of jobs) {
-    if (!(j.p > 0) || !(j.w > 0) || Number.isNaN(j.d)) {
-      throw new TypeError('every job needs p > 0, w > 0 and a numeric d');
+    if (!(j.p > 0) || !(j.w > 0) || typeof j.d !== 'number' || Number.isNaN(j.d) || Number.isNaN(j.s)) {
+      throw new TypeError('every job needs p > 0, w > 0 and a numeric d (and s, if given)');
     }
   }
   if (jobs.length <= exactLimit) return { ...solveExact(jobs), method: 'exact', optimal: true };
@@ -212,6 +231,7 @@ function sequence(jobs, { exactLimit = DEFAULT_EXACT_LIMIT } = {}) {
 
 module.exports = {
   DEFAULT_EXACT_LIMIT,
+  better,
   evaluate,
   solveExact,
   solveHeuristic,
