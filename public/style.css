@@ -143,6 +143,16 @@ button:focus-visible, input:focus-visible, select:focus-visible {
 }
 .schedule-list li.break { background: #ecfdf5; border-left-color: var(--break); color: #065f46; }
 .schedule-list .time { font-variant-numeric: tabular-nums; font-weight: 600; font-size: 0.9rem; }
+.schedule-list .why { display: block; font-size: 0.78rem; color: var(--muted); margin-top: 2px; }
+.plan-summary {
+  margin: 12px 0 0;
+  padding: 8px 12px;
+  border-radius: 10px;
+  background: #ecfdf5;
+  color: #065f46;
+  font-size: 0.88rem;
+}
+.plan-summary.warn { background: #fff7ed; color: #9a3412; }
 .unscheduled {
   margin-top: 12px;
   padding: 10px 12px;

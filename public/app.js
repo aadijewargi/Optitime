@@ -105,12 +105,39 @@ function localNowISO() {
   return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`;
 }
 
+function summaryText(summary) {
+  if (!summary || !summary.tasksConsidered) return '';
+  const how = summary.optimal ? 'Optimal order' : 'Optimized order (fast heuristic)';
+  const plural = (n, word) => `${n} ${word}${n === 1 ? '' : 's'}`;
+  const parts = [];
+  if (summary.overdueTasks) parts.push(`${plural(summary.overdueTasks, 'overdue task')} first`);
+  parts.push(
+    summary.lateTasks === 0
+      ? `${summary.overdueTasks ? 'everything else' : 'everything'} finishes on time`
+      : `${plural(summary.lateTasks, 'task')} can't make the deadline`,
+  );
+  let text = `${how}: ${parts.join(', ')}.`;
+  const base = summary.baseline;
+  if (base && base.weightedLateMinutes > summary.weightedLateMinutes) {
+    text += base.lateTasks > summary.lateTasks
+      ? ` A simple due-date order would leave ${base.lateTasks} late.`
+      : ' Less important work slips instead of more important work.';
+  }
+  return text;
+}
+
 async function renderSchedule() {
-  const { blocks, unscheduled } = await api(`/schedule?now=${encodeURIComponent(localNowISO())}`);
+  const { blocks, unscheduled, summary } = await api(`/schedule?now=${encodeURIComponent(localNowISO())}`);
   const list = $('schedule-list');
   list.innerHTML = '';
   $('schedule-empty').hidden = blocks.length > 0;
 
+  const banner = $('plan-summary');
+  banner.textContent = summaryText(summary);
+  banner.hidden = !banner.textContent;
+  banner.classList.toggle('warn', Boolean(summary && summary.lateTasks));
+
+  const explained = new Set();
   for (const block of blocks) {
     const li = document.createElement('li');
     if (block.type === 'break') li.classList.add('break');
@@ -119,6 +146,14 @@ async function renderSchedule() {
     time.textContent = `${block.start}–${block.end}`;
     const label = document.createElement('span');
     label.textContent = block.part ? `${block.title} (${block.part})` : block.title;
+    // Explain each task once, on its first block.
+    if (block.reason && !explained.has(block.taskId)) {
+      explained.add(block.taskId);
+      const why = document.createElement('small');
+      why.className = 'why';
+      why.textContent = block.reason;
+      label.append(why);
+    }
     li.append(time, label);
     list.appendChild(li);
   }
@@ -128,8 +163,13 @@ async function renderSchedule() {
     box.hidden = false;
     box.textContent =
       "Didn't fit today: " +
-      unscheduled.map((u) => `${u.title} (${u.minutesLeft} min left)`).join('; ') +
-      '. Consider moving them to tomorrow.';
+      unscheduled
+        .map((u) => {
+          const when = u.plannedFinish ? `, finishes ${u.plannedFinish}` : '';
+          return `${u.title} (${u.minutesLeft} min left${when}${u.late ? ', late' : ''})`;
+        })
+        .join('; ') +
+      '.';
   } else {
     box.hidden = true;
   }
