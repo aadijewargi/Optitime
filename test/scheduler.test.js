@@ -148,9 +148,16 @@ test('overdue work goes first and says why', () => {
 });
 
 test('quick win leads only when it makes nothing late', () => {
-  const free = [mk({ id: 'big', estimateMinutes: 90 }), mk({ id: 'tiny', estimateMinutes: 10 })];
+  // The optimizer alone would start the task due today; a 10-min warm-up still fits.
+  const free = [mk({ id: 'big', estimateMinutes: 90, dueDate: '2026-10-15' }), mk({ id: 'tiny', estimateMinutes: 10 })];
+  assert.strictEqual(generateSchedule(free, settings, now, { quickWin: false }).blocks[0].taskId, 'big');
   const r1 = generateSchedule(free, settings, now);
   assert.strictEqual(r1.blocks[0].taskId, 'tiny');
+  assert.strictEqual(r1.plan[0].reason, 'Quick win to build momentum');
+
+  // Already first on its own merits: keep the real reason.
+  const dueSmall = [mk({ id: 'small', estimateMinutes: 10, dueDate: '2026-10-15' }), mk({ id: 'big', estimateMinutes: 90 })];
+  assert.strictEqual(generateSchedule(dueSmall, settings, now).plan[0].reason, 'Due today');
 
   // 15:00-15:30 window: only 25 minutes. The due-today task needs all of it.
   const tight = { ...settings, dayEnd: '15:30' };

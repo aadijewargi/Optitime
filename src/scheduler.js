@@ -192,8 +192,6 @@ function generateSchedule(tasks, settings, now = new Date(), options = {}) {
         order = moved;
         quickWinIdx = q;
       }
-    } else if (q >= 0) {
-      quickWinIdx = q;
     }
   }
   const cost = evaluate(jobs, order);
