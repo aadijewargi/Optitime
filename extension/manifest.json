@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
   "name": "OptiTime",
-  "version": "1.0.0",
-  "description": "Set daily time limits for distracting websites. OptiTime blocks them when your time is up.",
+  "version": "1.1.0",
+  "description": "Set daily time limits for distracting websites and keep a to-do list. OptiTime blocks the sites when your time is up.",
   "icons": {
     "16": "icons/icon16.png",
     "32": "icons/icon32.png",

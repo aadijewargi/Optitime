@@ -11,15 +11,21 @@ The daily plan is built by an **optimizer**, not a fixed sort. It finds the task
   <img src="docs/plan-screenshot.png" alt="Today's plan: an overdue worksheet first, then the essay due today, then tomorrow's lab report, each with the reason it is there" width="380">
 </p>
 
-## Chrome extension: site blocker
+## Chrome extension: site blocker and to-do list
 
-OptiTime includes a Chrome extension (in `extension/`) that blocks distracting websites once your daily time limit is used up.
+OptiTime includes a Chrome extension (in `extension/`) that blocks distracting websites once your daily time limit is used up, and keeps a quick to-do list one click away in the toolbar.
+
+<p align="center">
+  <img src="docs/extension-todo.png" alt="The OptiTime popup's To-do tab: three open items with move up, move down and delete buttons, one finished item struck through, and a 'Clear 1 finished' link" width="300">
+</p>
 
 - **Per-site daily limits** – add a site (e.g. `youtube.com`) and a limit in minutes. A limit of `0` blocks the site entirely.
 - **Real blocking** – when time is up, the browser itself redirects the site (and its subdomains) to a "Time's up" page, using Chrome's `declarativeNetRequest` API. Tabs that are already open on the site are moved to the block page too.
 - **Fair timing** – time only counts while Chrome is the focused window, the site is the active tab, and you aren't idle.
 - **Resets at midnight** – usage is tracked per day, in your local time.
 - **On/off switch** and a toolbar badge showing how many sites are currently blocked.
+- **To-do list** – the popup opens on a To-do tab. Add items, tick them off, rename one by double-clicking it, reorder with the ↑/↓ buttons, and clear finished items in one click. The tab shows how many are left, and the popup remembers which tab you used last.
+- **Something better to do** – when a site is blocked, the "Time's up" page lists the next five things on your to-do list, and you can tick them off right there.
 - All data stays in your browser (`chrome.storage.local`). Nothing is sent anywhere.
 
 ### Install it in Chrome
@@ -219,15 +225,16 @@ extension/           Chrome extension (Manifest V3)
   background.js      service worker: time tracking + blocking rules
   lib/core.js        pure logic shared by the extension and the tests
   popup.*            toolbar popup (sites, limits, on/off)
-  blocked.*          the "Time's up" page
+  todo.js            popup tabs and the to-do list
+  blocked.*          the "Time's up" page (with your open to-dos)
 test/                unit, property and API tests
 bench/benchmark.js   rule order vs heuristic vs exact DP
-docs/                README screenshot
+docs/                README screenshots
 ```
 
 ## Ideas for next steps
 
-- Sync the extension's limits and usage with the web app
+- Sync the extension's limits, usage and to-do list with the web app
 - A "focus session" mode that blocks every listed site for a set time
 - Publish the extension to the Chrome Web Store
 - Real accounts and authentication
