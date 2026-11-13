@@ -15,20 +15,45 @@
     </label>
   </header>
 
-  <p id="status" class="muted"></p>
-  <ul id="sites" class="sites"></ul>
-  <p id="empty" class="muted" hidden>No sites yet. Add a distracting site below.</p>
+  <nav class="tabs" role="tablist" aria-label="OptiTime sections">
+    <button class="tab" role="tab" id="tab-todo" aria-controls="panel-todo" data-tab="todo">
+      To-do <span id="todo-badge" class="badge" hidden></span>
+    </button>
+    <button class="tab" role="tab" id="tab-sites" aria-controls="panel-sites" data-tab="sites">Site limits</button>
+  </nav>
 
-  <form id="add-form" class="add-form">
-    <input id="domain" placeholder="youtube.com" autocomplete="off" required aria-label="Website">
-    <input id="limit" type="number" min="0" max="1440" value="30" required aria-label="Daily limit in minutes">
-    <span class="unit">min/day</span>
-    <button class="primary" type="submit">Add</button>
-  </form>
-  <button id="add-current" class="link-btn" type="button"></button>
-  <p id="error" class="error" role="alert"></p>
+  <section id="panel-todo" class="panel" role="tabpanel" aria-labelledby="tab-todo">
+    <form id="todo-form" class="todo-form">
+      <input id="todo-text" placeholder="What do you need to do?" autocomplete="off" maxlength="200" aria-label="New to-do">
+      <button class="primary" type="submit">Add</button>
+    </form>
+    <p id="todo-error" class="error" role="alert"></p>
+    <p id="todo-summary" class="muted"></p>
+    <ul id="todos" class="todos"></ul>
+    <p id="todo-empty" class="muted empty" hidden>Nothing on your list. Add the first thing you want to get done today.</p>
+    <div class="todo-footer">
+      <span id="todo-hint" class="muted hint">Double-click an item to rename it.</span>
+      <button id="clear-done" class="link-btn small" type="button" hidden></button>
+    </div>
+  </section>
+
+  <section id="panel-sites" class="panel" role="tabpanel" aria-labelledby="tab-sites">
+    <p id="status" class="muted"></p>
+    <ul id="sites" class="sites"></ul>
+    <p id="empty" class="muted" hidden>No sites yet. Add a distracting site below.</p>
+
+    <form id="add-form" class="add-form">
+      <input id="domain" placeholder="youtube.com" autocomplete="off" required aria-label="Website">
+      <input id="limit" type="number" min="0" max="1440" value="30" required aria-label="Daily limit in minutes">
+      <span class="unit">min/day</span>
+      <button class="primary" type="submit">Add</button>
+    </form>
+    <button id="add-current" class="link-btn" type="button"></button>
+    <p id="error" class="error" role="alert"></p>
+  </section>
 
   <script src="lib/core.js"></script>
   <script src="popup.js"></script>
+  <script src="todo.js"></script>
 </body>
 </html>

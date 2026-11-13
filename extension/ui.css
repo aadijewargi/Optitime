@@ -53,6 +53,35 @@ body.popup { width: 340px; padding: 14px; }
 .unit { font-size: 0.75rem; color: var(--muted); }
 .link-btn { margin-top: 8px; width: 100%; background: none; border: none; color: var(--accent); text-align: left; padding: 2px 0; }
 
+/* Tabs */
+.tabs { display: flex; gap: 4px; margin: 12px 0 10px; padding: 3px; background: var(--border); border-radius: 10px; }
+.tab { flex: 1; border: none; background: none; padding: 6px 8px; border-radius: 8px; color: var(--muted); font-weight: 600; font-size: 0.9rem; }
+.tab[aria-selected="true"] { background: var(--card); color: var(--text); box-shadow: 0 1px 2px rgba(0, 0, 0, 0.08); }
+.badge { display: inline-block; min-width: 18px; padding: 0 5px; margin-left: 2px; border-radius: 999px; background: var(--accent); color: #fff; font-size: 0.72rem; line-height: 18px; text-align: center; }
+.panel[hidden], .badge[hidden] { display: none; }
+.panel > .muted:first-child { margin-top: 0; }
+
+/* To-do list */
+.todo-form { display: grid; grid-template-columns: 1fr auto; gap: 6px; }
+.todo-form input { min-width: 0; width: 100%; }
+#todo-summary { margin: 0 0 6px; }
+#todo-summary:empty { display: none; }
+.todos { list-style: none; padding: 0; margin: 0; max-height: 300px; overflow-y: auto; }
+.todos li { display: flex; align-items: center; gap: 8px; padding: 7px 8px; margin-bottom: 6px; background: var(--card); border: 1px solid var(--border); border-radius: 10px; }
+.todos input[type="checkbox"] { width: 17px; height: 17px; margin: 0; padding: 0; flex: none; accent-color: var(--accent); cursor: pointer; }
+.todo-text { flex: 1; min-width: 0; overflow-wrap: anywhere; cursor: text; }
+.todos li.done .todo-text { color: var(--muted); text-decoration: line-through; }
+.todo-edit { flex: 1; min-width: 0; padding: 3px 6px; }
+.todo-actions { display: flex; gap: 2px; flex: none; }
+.todo-actions .icon-btn { padding: 1px 7px; line-height: 1.3; border-color: transparent; background: none; color: var(--muted); }
+.todo-actions .icon-btn:hover:not(:disabled) { border-color: var(--border); color: var(--text); }
+.todo-actions .icon-btn:disabled { opacity: 0.3; cursor: default; }
+.todo-actions .delete:hover { color: var(--danger) !important; }
+.todo-footer { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-top: 6px; }
+.hint { font-size: 0.75rem; }
+.link-btn.small { width: auto; margin: 0; font-size: 0.8rem; text-align: right; }
+.empty { text-align: center; padding: 14px 6px; }
+
 /* On/off switch */
 .switch { position: relative; width: 42px; height: 24px; display: inline-block; }
 .switch input { opacity: 0; width: 100%; height: 100%; position: absolute; margin: 0; cursor: pointer; z-index: 1; }
