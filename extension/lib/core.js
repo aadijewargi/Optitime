@@ -87,5 +87,95 @@
     return rem ? `${h}h ${rem}m` : `${h}h`;
   }
 
-  return { normalizeDomain, domainMatches, findSite, dayKey, computeBlocked, addSite, removeSite, formatDuration };
+  // ---- To-do list ----
+  // A todo is { id, text, done, createdAt, doneAt }. Every function returns a
+  // new array and never mutates its input, so storage writes stay simple.
+
+  const MAX_TODO_LENGTH = 200;
+  const MAX_TODOS = 200;
+
+  /** Collapses whitespace and checks length. Returns { text } or { error }. */
+  function cleanTodoText(input) {
+    const text = String(input == null ? '' : input).replace(/\s+/g, ' ').trim();
+    if (!text) return { error: 'Type something to do first' };
+    if (text.length > MAX_TODO_LENGTH) {
+      return { error: `Keep it under ${MAX_TODO_LENGTH} characters` };
+    }
+    return { text };
+  }
+
+  function makeId(now) {
+    return `${now.toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+  }
+
+  /** Adds an item to the end of the list. `now` and `id` are injectable for tests. */
+  function addTodo(todos, input, now, id) {
+    const list = todos || [];
+    const cleaned = cleanTodoText(input);
+    if (cleaned.error) return { error: cleaned.error };
+    if (list.length >= MAX_TODOS) {
+      return { error: `Your list is full (${MAX_TODOS} items). Clear some finished ones first` };
+    }
+    const t = now == null ? Date.now() : now;
+    const item = { id: id || makeId(t), text: cleaned.text, done: false, createdAt: t, doneAt: null };
+    return { todos: [...list, item] };
+  }
+
+  function toggleTodo(todos, id, now) {
+    const t = now == null ? Date.now() : now;
+    return (todos || []).map((item) =>
+      item.id === id ? { ...item, done: !item.done, doneAt: item.done ? null : t } : item
+    );
+  }
+
+  /** Renames an item. Returns { todos } or { error } (the list is unchanged on error). */
+  function editTodo(todos, id, input) {
+    const cleaned = cleanTodoText(input);
+    if (cleaned.error) return { error: cleaned.error };
+    return { todos: (todos || []).map((item) => (item.id === id ? { ...item, text: cleaned.text } : item)) };
+  }
+
+  function removeTodo(todos, id) {
+    return (todos || []).filter((item) => item.id !== id);
+  }
+
+  function clearDoneTodos(todos) {
+    return (todos || []).filter((item) => !item.done);
+  }
+
+  /**
+   * Moves an item `delta` places among the unfinished items (-1 = up, +1 = down).
+   * Finished items keep their positions. Out-of-range moves are a no-op.
+   */
+  function moveTodo(todos, id, delta) {
+    const list = [...(todos || [])];
+    const open = list.map((item, i) => (item.done ? -1 : i)).filter((i) => i >= 0);
+    const at = open.findIndex((i) => list[i].id === id);
+    const to = at + delta;
+    if (at < 0 || to < 0 || to >= open.length) return list;
+    const a = open[at];
+    const b = open[to];
+    [list[a], list[b]] = [list[b], list[a]];
+    return list;
+  }
+
+  /** Display order: unfinished items in list order, then finished ones, newest first. */
+  function sortTodos(todos) {
+    const list = todos || [];
+    const open = list.filter((item) => !item.done);
+    const done = list.filter((item) => item.done).sort((a, b) => (b.doneAt || 0) - (a.doneAt || 0));
+    return [...open, ...done];
+  }
+
+  function todoCounts(todos) {
+    const list = todos || [];
+    const done = list.filter((item) => item.done).length;
+    return { total: list.length, done, open: list.length - done };
+  }
+
+  return {
+    normalizeDomain, domainMatches, findSite, dayKey, computeBlocked, addSite, removeSite, formatDuration,
+    MAX_TODO_LENGTH, MAX_TODOS, cleanTodoText, addTodo, toggleTodo, editTodo, removeTodo, clearDoneTodos,
+    moveTodo, sortTodos, todoCounts,
+  };
 });
